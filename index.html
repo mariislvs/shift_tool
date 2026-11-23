@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>shiftAPPens Tool</title>
+  <style>
+    :root {
+      --color-1: #DF48B6;
+      --color-2: #FFEA00;
+      --color-3: #FE593B;
+      --color-4: #32C4BA;
+      --color-5: #039545;
+
+      --bg-color: #ffffff;
+      --text-color: #555555;
+      --line-color: #e4e4e4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 24px 16px 48px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+    }
+
+    .logo {
+      max-width: 220px;
+      width: 60vw;
+      height: auto;
+      display: block;
+    }
+
+    main {
+      width: 100%;
+      max-width: 1000px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 760px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    /* Pré-visualização */
+    .stage {
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      max-height: 80vh;
+      object-fit: contain;
+      height: auto;
+      border: 1px solid var(--line-color);
+      cursor: grab;
+      touch-action: none;
+      /* xadrez para mostrar a transparência */
+      background-color: #fff;
+      background-image:
+        linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%),
+        linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 10px 10px;
+    }
+
+    canvas.dragging { cursor: grabbing; }
+
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+
+    .empty[hidden] { display: none; }
+
+    /* Controlos */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    fieldset {
+      border: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    legend {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    input[type="number"] {
+      width: 80px;
+      padding: 4px 6px;
+      border: 1px solid var(--line-color);
+      border-radius: 6px;
+      font: inherit;
+      color: inherit;
+    }
+
+    input[type="range"] { width: 140px; }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 8px 12px;
+      border: 1px solid var(--line-color);
+      border-radius: 999px;
+      background: #fff;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--text-color); }
+
+    button.primary {
+      background: var(--color-4);
+      border-color: var(--color-4);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .stroke-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .swatches {
+      display: flex;
+      gap: 4px;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    .swatch.selected {
+      outline: 2px solid var(--text-color);
+      outline-offset: 2px;
+    }
+
+    .swatch.none {
+      background:
+        linear-gradient(45deg, transparent 45%, #d33 45%, #d33 55%, transparent 55%), #fff;
+    }
+
+    .hint {
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.4;
+    }
+
+    .status-message {
+      min-height: 1.5em;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <img src="logo.png" alt="Shift Happens" class="logo" />
+
+  <main>
+    <div class="stage">
+      <canvas id="canvas" width="1080" height="1350"></canvas>
+      <p class="empty" id="empty">Carrega um PNG com fundo transparente para começar.</p>
+    </div>
+
+    <div class="controls">
+      <fieldset>
+        <legend>Imagem</legend>
+        <input type="file" id="file" accept="image/png" />
+        <p class="hint">PNG com fundo transparente. Arrasta a imagem para mover e usa a roda do rato (ou o slider) para mudar o tamanho.</p>
+        <label>Tamanho <input type="range" id="zoom" min="10" max="300" value="100" /></label>
+        <div class="row"><button id="center">Centrar</button></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Canvas</legend>
+        <label>Largura (px) <input type="number" id="width" min="100" max="6000" value="1080" /></label>
+        <label>Altura (px) <input type="number" id="height" min="100" max="6000" value="1350" /></label>
+        <div class="stroke-row"><span>Fundo</span><div class="swatches" id="bg"></div></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Contornos</legend>
+        <label>Número <input type="number" id="count" min="0" max="12" value="3" /></label>
+        <label>Espessura (% da largura) <input type="number" id="stroke" min="0.1" max="20" step="0.1" value="3" /></label>
+        <p class="hint" id="stroke-px"></p>
+        <label>Suavizar <input type="range" id="smooth" min="0" max="80" value="20" /></label>
+        <div id="strokes"></div>
+        <p class="hint">O contorno 1 é o mais próximo do objeto.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Exportar</legend>
+        <div class="row">
+          <button class="primary" id="export-png" disabled>PNG</button>
+          <button class="primary" id="export-svg" disabled>SVG</button>
+        </div>
+      </fieldset>
+
+      <p id="status" class="status-message"></p>
+    </div>
+  </main>
+
+  <script>
+    // ---------- Configuração ----------
+    const PALETTE = ["#DF48B6", "#FFEA00", "#FE593B", "#32C4BA", "#039545", "#1A2321", "#FFFBF8"];
+    const REF_WIDTH = 1080;      // a espessura de referência é para um canvas com esta largura
+    const ALPHA_THRESHOLD = 128; // píxeis com alpha >= isto contam como objeto
+
+    const state = {
+      img: null,
+      dataURL: null,
+      name: "imagem",
+      W: 1080,
+      H: 1350,
+      cx: 540,     // centro do objeto (px do canvas)
+      cy: 675,
+      zoom: 1,     // relativo ao tamanho "encaixado"
+      fit: 1,      // escala que encaixa a imagem no canvas
+      count: 3,
+      stroke: 3,   // % da largura do canvas (32.4px num canvas de 1080px)
+      smooth: 20,
+      colors: [],
+      bg: null,    // null = transparente
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function defaultColor(i) {
+      return i % 2 === 0 ? PALETTE[0] : PALETTE[1];
+    }
+
+    // ---------- Distance transform (Felzenszwalb & Huttenlocher) ----------
+    function dt1d(f, n, d, v, z) {
+      let k = 0;
+      v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+      for (let q = 1; q < n; q++) {
+        let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+        while (s <= z[k]) {
+          k--;
+          s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+        }
+        k++;
+        v[k] = q; z[k] = s; z[k + 1] = Infinity;
+      }
+      k = 0;
+      for (let q = 0; q < n; q++) {
+        while (z[k + 1] < q) k++;
+        const t = q - v[k];
+        d[q] = t * t + f[v[k]];
+      }
+    }
+
+    // distância de cada píxel ao píxel mais próximo com mask == target
+    function edt(mask, w, h, target) {
+      const INF = 1e20, n = Math.max(w, h);
+      const g = new Float64Array(w * h);
+      for (let i = 0; i < g.length; i++) g[i] = mask[i] === target ? 0 : INF;
+      const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+      for (let x = 0; x < w; x++) {
+        for (let y = 0; y < h; y++) f[y] = g[y * w + x];
+        dt1d(f, h, d, v, z);
+        for (let y = 0; y < h; y++) g[y * w + x] = d[y];
+      }
+      const out = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) {
+        const o = y * w;
+        for (let x = 0; x < w; x++) f[x] = g[o + x];
+        dt1d(f, w, d, v, z);
+        for (let x = 0; x < w; x++) out[o + x] = Math.min(Math.sqrt(d[x]), 1e5);
+      }
+      return out;
+    }
+
+    // ---------- Blur (3 passagens de box blur ≈ gaussiano) ----------
+    function blurH(s, d, w, h, r) {
+      const inv = 1 / (2 * r + 1);
+      for (let y = 0; y < h; y++) {
+        const o = y * w;
+        let acc = s[o] * (r + 1);
+        for (let i = 1; i <= r; i++) acc += s[o + Math.min(i, w - 1)];
+        for (let x = 0; x < w; x++) {
+          d[o + x] = acc * inv;
+          acc += s[o + Math.min(x + r + 1, w - 1)] - s[o + Math.max(x - r, 0)];
+        }
+      }
+    }
+
+    function blurV(s, d, w, h, r) {
+      const inv = 1 / (2 * r + 1);
+      for (let x = 0; x < w; x++) {
+        let acc = s[x] * (r + 1);
+        for (let i = 1; i <= r; i++) acc += s[Math.min(i, h - 1) * w + x];
+        for (let y = 0; y < h; y++) {
+          d[y * w + x] = acc * inv;
+          acc += s[Math.min(y + r + 1, h - 1) * w + x] - s[Math.max(y - r, 0) * w + x];
+        }
+      }
+    }
+
+    function boxBlur(src, w, h, r) {
+      const a = Float32Array.from(src), b = new Float32Array(src.length);
+      for (let pass = 0; pass < 3; pass++) {
+        blurH(a, b, w, h, r);
+        blurV(b, a, w, h, r);
+      }
+      return a;
+    }
+
+    // ---------- Campo de distância ----------
+    // F[i] = distância (com sinal) ao objeto. O contorno k ocupa F <= k * espessura.
+    function drawObject(c) {
+      const s = state.fit * state.zoom;
+      const iw = state.img.naturalWidth * s, ih = state.img.naturalHeight * s;
+      c.imageSmoothingQuality = "high";
+      c.drawImage(state.img, state.cx - iw / 2, state.cy - ih / 2, iw, ih);
+    }
+
+    function computeField(q) {
+      const Ws = Math.max(1, Math.round(state.W * q));
+      const Hs = Math.max(1, Math.round(state.H * q));
+      const unit = (state.W / REF_WIDTH) * q;
+      const w = (state.stroke / 100) * state.W * q;
+      const blur = Math.round(state.smooth * unit);
+      // margem à volta do canvas para que partes do objeto fora do canvas também gerem contornos
+      const M = Math.ceil(state.count * w + 3 * blur + 2);
+      const FW = Ws + 2 * M, FH = Hs + 2 * M;
+
+      const off = document.createElement("canvas");
+      off.width = FW; off.height = FH;
+      const oc = off.getContext("2d", { willReadFrequently: true });
+      oc.setTransform(q, 0, 0, q, M, M);
+      drawObject(oc);
+      const px = oc.getImageData(0, 0, FW, FH).data;
+
+      const N = FW * FH;
+      const mask = new Uint8Array(N);
+      let any = false;
+      for (let i = 0; i < N; i++) {
+        if (px[i * 4 + 3] >= ALPHA_THRESHOLD) { mask[i] = 1; any = true; }
+      }
+
+      const F = new Float32Array(N);
+      if (any) {
+        const dOut = edt(mask, FW, FH, 1); // distância ao objeto
+        const dIn = edt(mask, FW, FH, 0);  // distância ao fundo
+        for (let i = 0; i < N; i++) F[i] = mask[i] ? 0.5 - dIn[i] : dOut[i] - 0.5;
+        if (blur >= 1) {
+          // suaviza as reentrâncias sem "comer" as pontas do objeto
+          const B = boxBlur(F, FW, FH, blur);
+          for (let i = 0; i < N; i++) if (B[i] < F[i]) F[i] = B[i];
+        }
+      } else {
+        F.fill(1e5);
+      }
+      return { F, FW, FH, M, Ws, Hs, w };
+    }
+
+    // ---------- Render (raster) ----------
+    function hexToRgb(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    function renderTo(target, q) {
+      const f = computeField(q);
+      target.width = f.Ws;
+      target.height = f.Hs;
+      const c = target.getContext("2d");
+      const out = c.createImageData(f.Ws, f.Hs);
+      const d = out.data;
+      const cols = state.colors.slice(0, state.count).map(hexToRgb);
+      const bg = state.bg ? hexToRgb(state.bg) : null;
+
+      for (let y = 0; y < f.Hs; y++) {
+        const row = (y + f.M) * f.FW + f.M;
+        for (let x = 0; x < f.Ws; x++) {
+          const v = f.F[row + x];
+          let r = 0, g = 0, b = 0, a = 0;
+          if (bg) { r = bg[0]; g = bg[1]; b = bg[2]; a = 1; }
+          // do contorno de fora para o de dentro
+          for (let k = state.count - 1; k >= 0; k--) {
+            let t = (k + 1) * f.w - v + 0.5;
+            if (t <= 0) break;
+            if (t > 1) t = 1;
+            const col = cols[k];
+            const na = t + a * (1 - t);
+            r = (col[0] * t + r * a * (1 - t)) / na;
+            g = (col[1] * t + g * a * (1 - t)) / na;
+            b = (col[2] * t + b * a * (1 - t)) / na;
+            a = na;
+          }
+          const o = (y * f.Ws + x) * 4;
+          d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = a * 255;
+        }
+      }
+      c.putImageData(out, 0, 0);
+      c.setTransform(q, 0, 0, q, 0, 0);
+      drawObject(c);
+      c.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    // ---------- Contornos vetoriais (marching squares) ----------
+    function contours(f, L) {
+      const GW = f.Ws + 2, GH = f.Hs + 2;
+      const G = new Float32Array(GW * GH);
+      for (let j = 0; j < GH; j++) {
+        for (let i = 0; i < GW; i++) {
+          const border = i === 0 || j === 0 || i === GW - 1 || j === GH - 1;
+          G[j * GW + i] = border ? 1e9 : f.F[(j - 1 + f.M) * f.FW + (i - 1 + f.M)];
+        }
+      }
+
+      const pts = new Map();
+      const adj = new Map();
+      const W = f.Ws, H = f.Hs;
+      const snap = (val, max) => (val < 0.5 ? 0 : val > max - 0.5 ? max : val);
+
+      function point(id, i0, j0, i1, j1) {
+        if (pts.has(id)) return;
+        const v0 = G[j0 * GW + i0], v1 = G[j1 * GW + i1];
+        const t = (L - v0) / (v1 - v0);
+        const x = i0 + (i1 - i0) * t - 0.5;
+        const y = j0 + (j1 - j0) * t - 0.5;
+        pts.set(id, [snap(x, W), snap(y, H)]);
+      }
+      function link(a, b) {
+        if (!adj.has(a)) adj.set(a, []);
+        if (!adj.has(b)) adj.set(b, []);
+        adj.get(a).push(b);
+        adj.get(b).push(a);
+      }
+
+      for (let j = 0; j < GH - 1; j++) {
+        for (let i = 0; i < GW - 1; i++) {
+          const tl = G[j * GW + i], tr = G[j * GW + i + 1];
+          const br = G[(j + 1) * GW + i + 1], bl = G[(j + 1) * GW + i];
+          const c = ((tl <= L) << 3) | ((tr <= L) << 2) | ((br <= L) << 1) | (bl <= L);
+          if (c === 0 || c === 15) continue;
+
+          const T = (j * GW + i) * 2, B = ((j + 1) * GW + i) * 2;
+          const Lf = (j * GW + i) * 2 + 1, R = (j * GW + i + 1) * 2 + 1;
+          const P = {
+            [T]: () => point(T, i, j, i + 1, j),
+            [B]: () => point(B, i, j + 1, i + 1, j + 1),
+            [Lf]: () => point(Lf, i, j, i, j + 1),
+            [R]: () => point(R, i + 1, j, i + 1, j + 1),
+          };
+          const seg = (a, b) => { P[a](); P[b](); link(a, b); };
+          const centerIn = (tl + tr + br + bl) / 4 <= L;
+
+          switch (c) {
+            case 1: seg(Lf, B); break;
+            case 2: seg(B, R); break;
+            case 3: seg(Lf, R); break;
+            case 4: seg(T, R); break;
+            case 5: if (centerIn) { seg(T, Lf); seg(B, R); } else { seg(T, R); seg(Lf, B); } break;
+            case 6: seg(T, B); break;
+            case 7: seg(T, Lf); break;
+            case 8: seg(T, Lf); break;
+            case 9: seg(T, B); break;
+            case 10: if (centerIn) { seg(T, R); seg(Lf, B); } else { seg(T, Lf); seg(B, R); } break;
+            case 11: seg(T, R); break;
+            case 12: seg(Lf, R); break;
+            case 13: seg(B, R); break;
+            case 14: seg(Lf, B); break;
+          }
+        }
+      }
+
+      const visited = new Set();
+      const loops = [];
+      for (const start of adj.keys()) {
+        if (visited.has(start)) continue;
+        const loop = [];
+        let prev = -1, cur = start;
+        while (cur !== undefined && !visited.has(cur)) {
+          visited.add(cur);
+          loop.push(pts.get(cur));
+          const nb = adj.get(cur);
+          const next = nb[0] !== prev ? nb[0] : nb[1];
+          prev = cur;
+          cur = next;
+        }
+        if (loop.length > 2) loops.push(simplify(loop, 0.35));
+      }
+      return loops;
+    }
+
+    // Ramer–Douglas–Peucker (iterativo)
+    function simplify(p, eps) {
+      const n = p.length;
+      if (n < 4) return p;
+      const keep = new Uint8Array(n);
+      keep[0] = keep[n - 1] = 1;
+      const stack = [[0, n - 1]];
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        const [ax, ay] = p[a], [bx, by] = p[b];
+        const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+        let max = 0, idx = -1;
+        for (let i = a + 1; i < b; i++) {
+          const d = len < 1e-6
+            ? Math.hypot(p[i][0] - ax, p[i][1] - ay)
+            : Math.abs(dy * (p[i][0] - ax) - dx * (p[i][1] - ay)) / len;
+          if (d > max) { max = d; idx = i; }
+        }
+        if (max > eps) {
+          keep[idx] = 1;
+          stack.push([a, idx], [idx, b]);
+        }
+      }
+      return p.filter((_, i) => keep[i]);
+    }
+
+    function buildSVG() {
+      const f = computeField(1);
+      const W = f.Ws, H = f.Hs;
+      let body = "";
+      if (state.bg) body += `<rect width="${W}" height="${H}" fill="${state.bg}"/>`;
+      for (let k = state.count - 1; k >= 0; k--) {
+        const loops = contours(f, (k + 1) * f.w);
+        const d = loops
+          .map((l) => "M" + l.map(([x, y]) => `${+x.toFixed(2)} ${+y.toFixed(2)}`).join("L") + "Z")
+          .join("");
+        if (d) body += `<path fill="${state.colors[k]}" fill-rule="evenodd" d="${d}"/>`;
+      }
+      const s = state.fit * state.zoom;
+      const iw = state.img.naturalWidth * s, ih = state.img.naturalHeight * s;
+      body += `<image href="${state.dataURL}" x="${state.cx - iw / 2}" y="${state.cy - ih / 2}" width="${iw}" height="${ih}" preserveAspectRatio="none"/>`;
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${body}</svg>`;
+    }
+
+    // ---------- Agendamento do render ----------
+    let rafId = 0, fullTimer = 0;
+
+    function requestRender() {
+      const px = Math.round((state.stroke / 100) * state.W * 10) / 10;
+      $("stroke-px").textContent = `= ${String(px).replace(".", ",")}px com ${state.W}px de largura`;
+      if (!state.img) return;
+      // preview rápido em baixa resolução enquanto se mexe, depois render completo
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        renderTo(canvas, Math.min(1, 540 / Math.max(state.W, state.H)));
+      });
+      clearTimeout(fullTimer);
+      fullTimer = setTimeout(() => renderTo(canvas, 1), 250);
+    }
+
+    // ---------- UI ----------
+    function setStatus(msg) { $("status").textContent = msg; }
+
+    function swatchRow(selected, onPick, allowNone) {
+      const wrap = document.createElement("div");
+      wrap.className = "swatches";
+      const options = allowNone ? [null, ...PALETTE] : PALETTE;
+      for (const col of options) {
+        const b = document.createElement("button");
+        b.className = "swatch" + (col ? "" : " none") + (col === selected ? " selected" : "");
+        if (col) b.style.background = col;
+        b.title = col || "Transparente";
+        b.addEventListener("click", () => {
+          wrap.querySelectorAll(".swatch").forEach((s) => s.classList.remove("selected"));
+          b.classList.add("selected");
+          onPick(col);
+        });
+        wrap.appendChild(b);
+      }
+      return wrap;
+    }
+
+    function buildStrokeRows() {
+      while (state.colors.length < state.count) state.colors.push(defaultColor(state.colors.length));
+      const box = $("strokes");
+      box.innerHTML = "";
+      for (let i = 0; i < state.count; i++) {
+        const row = document.createElement("div");
+        row.className = "stroke-row";
+        const label = document.createElement("span");
+        label.textContent = `Contorno ${i + 1}`;
+        row.appendChild(label);
+        row.appendChild(swatchRow(state.colors[i], (col) => { state.colors[i] = col; requestRender(); }));
+        box.appendChild(row);
+      }
+    }
+
+    function fitObject() {
+      if (!state.img) return;
+      state.fit = Math.min((state.W * 0.7) / state.img.naturalWidth, (state.H * 0.7) / state.img.naturalHeight);
+      state.cx = state.W / 2;
+      state.cy = state.H / 2;
+    }
+
+    function hasTransparency(img) {
+      const c = document.createElement("canvas");
+      const s = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+      c.width = Math.max(1, Math.round(img.naturalWidth * s));
+      c.height = Math.max(1, Math.round(img.naturalHeight * s));
+      const cc = c.getContext("2d");
+      cc.drawImage(img, 0, 0, c.width, c.height);
+      const d = cc.getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] < ALPHA_THRESHOLD) return true;
+      return false;
+    }
+
+    $("file").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.type !== "image/png") {
+        setStatus("A imagem tem de ser um PNG.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          state.img = img;
+          state.dataURL = reader.result;
+          state.name = file.name.replace(/\.png$/i, "");
+          state.zoom = 1;
+          $("zoom").value = 100;
+          fitObject();
+          $("empty").hidden = true;
+          $("export-png").disabled = false;
+          $("export-svg").disabled = false;
+          setStatus(hasTransparency(img) ? "" : "Esta imagem não tem fundo transparente — o contorno vai ficar retangular.");
+          requestRender();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    $("zoom").addEventListener("input", (e) => {
+      state.zoom = e.target.value / 100;
+      requestRender();
+    });
+
+    $("center").addEventListener("click", () => {
+      state.cx = state.W / 2;
+      state.cy = state.H / 2;
+      requestRender();
+    });
+
+    function readNumber(id, min, max, fallback) {
+      const v = parseFloat($(id).value);
+      return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+    }
+
+    function onCanvasSize() {
+      const W = Math.round(readNumber("width", 100, 6000, state.W));
+      const H = Math.round(readNumber("height", 100, 6000, state.H));
+      // mantém o objeto na mesma posição relativa
+      state.cx *= W / state.W;
+      state.cy *= H / state.H;
+      state.W = W;
+      state.H = H;
+      canvas.width = W;
+      canvas.height = H;
+      if (state.img) {
+        const z = state.zoom;
+        const cx = state.cx, cy = state.cy;
+        fitObject();
+        state.zoom = z; state.cx = cx; state.cy = cy;
+      }
+      requestRender();
+    }
+    $("width").addEventListener("change", onCanvasSize);
+    $("height").addEventListener("change", onCanvasSize);
+
+    $("count").addEventListener("input", () => {
+      state.count = Math.round(readNumber("count", 0, 12, state.count));
+      buildStrokeRows();
+      requestRender();
+    });
+
+    $("stroke").addEventListener("input", () => {
+      state.stroke = readNumber("stroke", 0.1, 20, state.stroke);
+      requestRender();
+    });
+
+    $("smooth").addEventListener("input", (e) => {
+      state.smooth = +e.target.value;
+      requestRender();
+    });
+
+    $("bg").replaceWith(Object.assign(swatchRow(null, (col) => { state.bg = col; requestRender(); }, true), { id: "bg" }));
+
+    // Arrastar e fazer zoom no canvas
+    let drag = null;
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!state.img) return;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.classList.add("dragging");
+      drag = { x: e.clientX, y: e.clientY };
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const rect = canvas.getBoundingClientRect();
+      const k = state.W / rect.width;
+      state.cx += (e.clientX - drag.x) * k;
+      state.cy += (e.clientY - drag.y) * k;
+      drag = { x: e.clientX, y: e.clientY };
+      requestRender();
+    });
+    const endDrag = () => { drag = null; canvas.classList.remove("dragging"); };
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+
+    canvas.addEventListener("wheel", (e) => {
+      if (!state.img) return;
+      e.preventDefault();
+      state.zoom = Math.min(3, Math.max(0.1, state.zoom * Math.exp(-e.deltaY * 0.001)));
+      $("zoom").value = Math.round(state.zoom * 100);
+      requestRender();
+    }, { passive: false });
+
+    // Exportar
+    function download(blob, filename) {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    $("export-png").addEventListener("click", () => {
+      setStatus("A exportar PNG...");
+      setTimeout(() => {
+        const out = document.createElement("canvas");
+        renderTo(out, 1);
+        out.toBlob((blob) => {
+          download(blob, `${state.name}_shift.png`);
+          setStatus("");
+        }, "image/png");
+      }, 20);
+    });
+
+    $("export-svg").addEventListener("click", () => {
+      setStatus("A exportar SVG...");
+      setTimeout(() => {
+        const svg = buildSVG();
+        download(new Blob([svg], { type: "image/svg+xml" }), `${state.name}_shift.svg`);
+        setStatus("");
+      }, 20);
+    });
+
+    buildStrokeRows();
+    requestRender();
+  </script>
+
+</body>
+</html>
