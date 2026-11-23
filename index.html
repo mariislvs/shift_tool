@@ -53,8 +53,12 @@
     }
 
     @media (max-width: 760px) {
-      main { grid-template-columns: 1fr; }
+      main { grid-template-columns: minmax(0, 1fr); }
     }
+
+    main > * { min-width: 0; }
+
+    input[type="file"] { max-width: 100%; }
 
     /* Pré-visualização */
     .stage {
@@ -65,10 +69,10 @@
 
     canvas {
       display: block;
+      /* largura e aspect-ratio são definidos em JS para respeitar sempre a proporção do canvas */
       width: 100%;
-      max-height: 80vh;
-      object-fit: contain;
       height: auto;
+      max-width: 100%;
       border: 1px solid var(--line-color);
       cursor: grab;
       touch-action: none;
@@ -223,8 +227,8 @@
 
       <fieldset>
         <legend>Canvas</legend>
-        <label>Largura (px) <input type="number" id="width" min="100" max="6000" value="1080" /></label>
-        <label>Altura (px) <input type="number" id="height" min="100" max="6000" value="1350" /></label>
+        <label>Largura (px) <input type="number" id="width" min="100" max="4096" value="1080" /></label>
+        <label>Altura (px) <input type="number" id="height" min="100" max="4096" value="1350" /></label>
         <div class="stroke-row"><span>Fundo</span><div class="swatches" id="bg"></div></div>
       </fieldset>
 
@@ -694,9 +698,18 @@
       return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
     }
 
+    // A caixa do canvas no ecrã tem sempre a proporção exata do canvas,
+    // cabendo na largura disponível e em 80% da altura da janela.
+    function applyCanvasBox() {
+      canvas.style.aspectRatio = `${state.W} / ${state.H}`;
+      canvas.style.width = `min(100%, calc(80vh * ${state.W / state.H}))`;
+    }
+
     function onCanvasSize() {
-      const W = Math.round(readNumber("width", 100, 6000, state.W));
-      const H = Math.round(readNumber("height", 100, 6000, state.H));
+      const W = Math.round(readNumber("width", 100, 4096, state.W));
+      const H = Math.round(readNumber("height", 100, 4096, state.H));
+      $("width").value = W;
+      $("height").value = H;
       // mantém o objeto na mesma posição relativa
       state.cx *= W / state.W;
       state.cy *= H / state.H;
@@ -704,6 +717,7 @@
       state.H = H;
       canvas.width = W;
       canvas.height = H;
+      applyCanvasBox();
       if (state.img) {
         const z = state.zoom;
         const cx = state.cx, cy = state.cy;
@@ -787,6 +801,7 @@
       }, 20);
     });
 
+    applyCanvasBox();
     buildStrokeRows();
     requestRender();
   </script>
