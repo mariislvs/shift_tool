@@ -231,8 +231,6 @@
       <fieldset>
         <legend>Contornos</legend>
         <label>Número <input type="number" id="count" min="0" max="12" value="3" /></label>
-        <label>Espessura (% da largura) <input type="number" id="stroke" min="0.1" max="20" step="0.1" value="3" /></label>
-        <p class="hint" id="stroke-px"></p>
         <label>Suavizar <input type="range" id="smooth" min="0" max="80" value="20" /></label>
         <div id="strokes"></div>
         <p class="hint">O contorno 1 é o mais próximo do objeto.</p>
@@ -267,7 +265,7 @@
       zoom: 1,     // relativo ao tamanho "encaixado"
       fit: 1,      // escala que encaixa a imagem no canvas
       count: 3,
-      stroke: 3,   // % da largura do canvas (32.4px num canvas de 1080px)
+      stroke: 3,   // fixo: % da largura do canvas (32.4px num canvas de 1080px)
       smooth: 20,
       colors: [],
       bg: null,    // null = transparente
@@ -586,8 +584,6 @@
     let rafId = 0, fullTimer = 0;
 
     function requestRender() {
-      const px = Math.round((state.stroke / 100) * state.W * 10) / 10;
-      $("stroke-px").textContent = `= ${String(px).replace(".", ",")}px com ${state.W}px de largura`;
       if (!state.img) return;
       // preview rápido em baixa resolução enquanto se mexe, depois render completo
       cancelAnimationFrame(rafId);
@@ -722,11 +718,6 @@
     $("count").addEventListener("input", () => {
       state.count = Math.round(readNumber("count", 0, 12, state.count));
       buildStrokeRows();
-      requestRender();
-    });
-
-    $("stroke").addEventListener("input", () => {
-      state.stroke = readNumber("stroke", 0.1, 20, state.stroke);
       requestRender();
     });
 
